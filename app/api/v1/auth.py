@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import get_password_hash, verify_password, create_access_token, get_current_active_user, get_current_user_with_role
+from app.core.security import (get_password_hash, verify_password, create_access_token, )
 from app.models.user import User
 from app.schema.user import UserCreate, UserResponse
 from fastapi.responses import JSONResponse
@@ -60,7 +60,7 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+async def login(form_data: OAuth2PasswordRequestForm = Depends(OAuth2PasswordRequestForm), db: Session = Depends(get_db)):
     """登录，返回JWT Token"""
     # 根据用户名查找用户
     user = db.query(User).filter(User.username == form_data.username).first()
@@ -95,19 +95,3 @@ async def refresh_token():
     return {"access_token": "mock-refreshed-token", "token_type": "bearer"}
 
 
-@router.get("/me", response_model=UserResponse)
-async def read_users_me(current_user: User = Depends(get_current_active_user)):
-    """测试获取当前用户信息（需要认证）"""
-    return current_user
-
-
-@router.get("/test/teacher")
-async def test_teacher_role(current_user: User = Depends(lambda: get_current_user_with_role("teacher"))):
-    """测试教师角色访问（需要教师角色）"""
-    return {"message": f"Welcome, teacher {current_user.username}!", "user_id": current_user.id}
-
-
-@router.get("/test/admin")
-async def test_admin_role(current_user: User = Depends(lambda: get_current_user_with_role("admin"))):
-    """测试管理员角色访问（需要管理员角色）"""
-    return {"message": f"Welcome, admin {current_user.username}!", "user_id": current_user.id}

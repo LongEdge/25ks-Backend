@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     # 文件存储配置
     UPLOAD_DIR: str = "uploads"
     MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
-    
+    # chormaDB配置
+    CHROMA_DB_URL: str = "localhost:8000"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

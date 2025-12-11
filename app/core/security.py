@@ -15,8 +15,8 @@ from app.models.user import User
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # OAuth2密码Bearer
-# oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -73,36 +73,3 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
     
     return user
-
-
-async def get_current_active_user(current_user: User = Depends(get_current_user)):
-    """获取当前活跃用户"""
-    # 这里可以添加用户活跃状态检查，例如：
-    # if not current_user.is_active:
-    #     raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
-
-
-async def get_current_user_with_role(required_role: str, current_user: User = Depends(get_current_active_user)):
-    """获取具有特定角色的当前用户"""
-    if current_user.role != required_role:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions"
-        )
-    return current_user
-
-
-async def get_token_payload(token: str = Depends(oauth2_scheme)):
-    """获取token的payload，仅验证token有效性，不检查用户是否存在"""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
-    payload = decode_access_token(token)
-    if payload is None:
-        raise credentials_exception
-    
-    return payload
