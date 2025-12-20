@@ -296,22 +296,26 @@ def filter_chinese_related_data():
         total_rows = conn.execute("SELECT COUNT(*) FROM chinese_related").fetchone()[0]
         print(f"✅ 筛选出语文相关总行数：{total_rows}")
 
-        # 3. 计算抽样比例（上限200万行）
-        if total_rows * SAMPLE_RATIO > 2000000:
-            sample_ratio = 2000000 / total_rows
+        # 3. 计算抽样目标行数（最多 200 万）
+        max_rows = 2_000_000
+        if total_rows * SAMPLE_RATIO > max_rows:
+            sample_ratio = max_rows / total_rows
             print(f"⚠️  数据量过大，自动调整抽样比例为：{sample_ratio:.2f}")
         else:
             sample_ratio = SAMPLE_RATIO
 
-        # 4. 导出数据（关键修复：COPY参数全部用 `参数 = 值` 格式）
+        # 4. RESERVOIR 抽样（DuckDB 官方推荐大数据抽样方式）
+        target_rows = int(total_rows * sample_ratio)
+
+        safe_path = OUTPUT_CSV_PATH.replace("\\", "/")
+
         export_sql = f"""
-            COPY (
-                SELECT * FROM chinese_related TABLESAMPLE BERNOULLI({sample_ratio * 100})
-            ) TO '{OUTPUT_CSV_PATH}' (
-                HEADER = True,
-                DELIMITER = ',',
-                ENCODING = 'utf-8'
-            );
+        COPY (
+            SELECT *
+            FROM chinese_related TABLESAMPLE RESERVOIR({target_rows})
+        )
+        TO '{safe_path}'
+        WITH (HEADER TRUE, DELIMITER ',');
         """
         conn.execute(export_sql)
 
