@@ -1,10 +1,34 @@
 import duckdb
 import os
+from typing import List
 
-# ===================== 配置参数（需替换为你的实际信息）=====================
+# ===================== 基础配置 =====================
 INPUT_CSV_PATH = r"D:\BaiduNetdiskDownload\ownthink_v2.csv"
-OUTPUT_CSV_PATH = "out_1.csv"  # 输出文件路径
-# 语文相关关键词（按需增删，比如加“文言文”“阅读理解”等）
+OUTPUT_CSV_PATH = "out_v2_chinese_teaching.csv"
+
+# ===================== 核心教学概念（强保） =====================
+CORE_CONCEPTS = [
+    "语文", "修辞", "句式", "文体", "主旨", "意象",
+    "表达", "理解", "推断", "概括", "分析",
+    "论证", "描写", "抒情", "叙事",
+    "导学", "板书", "研读", "讲解",
+    "评价", "评分", "难点", "重点"
+]
+
+# ===================== 教学关键词（召回用） =====================
+CHINESE_KEYWORDS = list(set(
+    CORE_CONCEPTS + [
+        "诗词", "文言", "小说", "散文", "戏剧",
+        "作文", "议论文", "说明文",
+        "比喻", "拟人", "夸张", "对比",
+        "作者", "作品", "背景", "主题",
+        "课堂", "备课", "教案", "课标",
+        "阅读", "写作", "赏析",
+        "能力", "素养", "迁移", "思辨"
+    ]
+))
+
+#  ==========================================================
 kw1=[
     # --- 核心知识 ---
     "语文", "文言", "诗词", "诗歌", "散文", "小说", "戏剧", "辞赋",
@@ -264,82 +288,108 @@ kw4=[
     "匹配", "关联", "扩展", "分析"
 ]
 
+kw = kw1 + kw2 + kw3 + kw4
+
+CHINESE_KEYWORDS+=kw
+# ===================== 抽样参数 =====================
 
 
-CHINESE_KEYWORDS =kw1+kw2+kw3+kw4
-# 抽样比例（若筛选后数据仍大，调小；若数据少，调1.0=全量）
-SAMPLE_RATIO = 0.5  # 保留50%的语文相关数据
+MAX_TOTAL_ROWS = 2_000_000
+CORE_KEEP_RATIO = 1.0      # 核心概念：全保留
+NON_CORE_SAMPLE_RATIO = 0.3  # 非核心：抽样比例
 
 
-# ===================== 连接DuckDB，筛选+抽样 =====================
-def filter_chinese_related_data():
+# ===================== 构造 LIKE 条件 =====================
+def like_any(field: str, keywords: List[str]) -> str:
+    return " OR ".join([f"{field} LIKE '%{kw}%'" for kw in keywords])
+
+
+# ===================== 主处理逻辑 =====================
+def extract_chinese_teaching_kg_v2():
     conn = duckdb.connect()
     try:
-        # 构建筛选条件
-        filter_conditions = " OR ".join([f"\"值\" LIKE '%{kw}%'" for kw in CHINESE_KEYWORDS])
+        print("🚀 开始构建 V2 教学知识子图...")
 
-        # 1. 筛选语文相关数据
+        # ---------- 1. 读取 + 初步筛选 ----------
+        entity_hit = like_any("实体", CHINESE_KEYWORDS)
+        attr_hit = like_any("属性", CHINESE_KEYWORDS)
+        value_hit = like_any("值", CHINESE_KEYWORDS)
+
         conn.execute(f"""
-            CREATE TEMP TABLE chinese_related AS
-            SELECT *
-            FROM read_csv(
-                '{INPUT_CSV_PATH}',
-                header = True,
-                sep = ',',
-                encoding = 'utf-8',
-                ignore_errors = True
-            )
-            WHERE {filter_conditions};
+        CREATE TEMP TABLE filtered AS
+        SELECT
+            *,
+            -- 命中得分（实体 > 属性 > 值）
+            (
+                CASE WHEN {entity_hit} THEN 3 ELSE 0 END +
+                CASE WHEN {attr_hit} THEN 2 ELSE 0 END +
+                CASE WHEN {value_hit} THEN 1 ELSE 0 END
+            ) AS match_score,
+
+            -- 是否核心教学概念
+            CASE
+                WHEN {" OR ".join([f"实体 LIKE '%{c}%'" for c in CORE_CONCEPTS])}
+                THEN 1 ELSE 0
+            END AS is_core
+        FROM read_csv(
+            '{INPUT_CSV_PATH}',
+            header = TRUE,
+            sep = ',',
+            encoding = 'utf-8',
+            ignore_errors = TRUE
+        )
+        WHERE ({entity_hit} OR {attr_hit} OR {value_hit});
         """)
 
-        # 2. 统计筛选结果
-        total_rows = conn.execute("SELECT COUNT(*) FROM chinese_related").fetchone()[0]
-        print(f"✅ 筛选出语文相关总行数：{total_rows}")
+        total = conn.execute("SELECT COUNT(*) FROM filtered").fetchone()[0]
+        core_count = conn.execute("SELECT COUNT(*) FROM filtered WHERE is_core = 1").fetchone()[0]
 
-        # 3. 计算抽样目标行数（最多 200 万）
-        max_rows = 2_000_000
-        if total_rows * SAMPLE_RATIO > max_rows:
-            sample_ratio = max_rows / total_rows
-            print(f"⚠️  数据量过大，自动调整抽样比例为：{sample_ratio:.2f}")
-        else:
-            sample_ratio = SAMPLE_RATIO
+        print(f"📊 初筛结果：{total} 行")
+        print(f"⭐ 核心概念命中：{core_count} 行")
 
-        # 4. RESERVOIR 抽样（DuckDB 官方推荐大数据抽样方式）
-        target_rows = int(total_rows * sample_ratio)
+        # ---------- 2. 分层抽样 ----------
+        remaining_quota = MAX_TOTAL_ROWS - core_count
+        if remaining_quota < 0:
+            remaining_quota = 0
 
+        sampled_non_core = int(remaining_quota * NON_CORE_SAMPLE_RATIO)
+
+        conn.execute(f"""
+        CREATE TEMP TABLE final_sample AS
+        SELECT * FROM filtered WHERE is_core = 1
+
+        UNION ALL
+
+        SELECT * FROM filtered
+        WHERE is_core = 0
+        TABLESAMPLE RESERVOIR({sampled_non_core});
+        """)
+
+        final_count = conn.execute("SELECT COUNT(*) FROM final_sample").fetchone()[0]
+
+        # ---------- 3. 导出 ----------
         safe_path = OUTPUT_CSV_PATH.replace("\\", "/")
-
-        export_sql = f"""
-        COPY (
-            SELECT *
-            FROM chinese_related TABLESAMPLE RESERVOIR({target_rows})
-        )
+        conn.execute(f"""
+        COPY final_sample
         TO '{safe_path}'
         WITH (HEADER TRUE, DELIMITER ',');
-        """
-        conn.execute(export_sql)
+        """)
 
-        # 5. 验证导出结果
-        if os.path.exists(OUTPUT_CSV_PATH):
-            file_size = os.path.getsize(OUTPUT_CSV_PATH) / (1024 * 1024)
-            sample_count = conn.execute(f"""
-                SELECT COUNT(*) FROM read_csv('{OUTPUT_CSV_PATH}', header = True, encoding = 'utf-8')
-            """).fetchone()[0]
-            print("🎉 筛选+抽样完成！")
-            print(f"📄 输出文件：{OUTPUT_CSV_PATH}")
-            print(f"📊 文件大小：{file_size:.2f} MB")
-            print(f"📈 抽样后行数：{sample_count}")
-        else:
-            print("❌ 导出失败：文件未生成")
+        file_size = os.path.getsize(OUTPUT_CSV_PATH) / (1024 * 1024)
+
+        print("🎉 V2 抽取完成！")
+        print(f"📄 输出文件：{OUTPUT_CSV_PATH}")
+        print(f"📈 最终行数：{final_count}")
+        print(f"💾 文件大小：{file_size:.2f} MB")
 
     except Exception as e:
-        print(f"❌ 出错了：{e}")
-        # 打印错误详情（方便排查）
+        print("❌ 抽取失败：", e)
         import traceback
         traceback.print_exc()
     finally:
         conn.close()
 
-# ===================== 执行主函数 =====================
+
+# ===================== 入口 =====================
 if __name__ == "__main__":
-    filter_chinese_related_data()
+    extract_chinese_teaching_kg_v2()
