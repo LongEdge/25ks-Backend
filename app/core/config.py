@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # chormaDB配置
     CHROMA_DB_URL: str = "localhost:8000"
 
+    # redis配置
+    REDIS_URL: str = "localhost:6379"
+    REDIS_KEY: str = "REDACTED"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

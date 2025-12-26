@@ -1,6 +1,7 @@
-import duckdb
+# ===================== 工具函数 =====================
 import os
-from typing import List
+
+import duckdb
 
 # ===================== 基础配置 =====================
 INPUT_CSV_PATH = r"D:\BaiduNetdiskDownload\ownthink_v2.csv"
@@ -288,9 +289,10 @@ kw4=[
     "匹配", "关联", "扩展", "分析"
 ]
 
-kw = kw1 + kw2 + kw3 + kw4
+kws = kw1 + kw2 + kw3 + kw4
 
-CHINESE_KEYWORDS+=kw
+CHINESE_KEYWORDS+=kws
+
 # ===================== 抽样参数 =====================
 
 
@@ -298,38 +300,34 @@ MAX_TOTAL_ROWS = 2_000_000
 CORE_KEEP_RATIO = 1.0      # 核心概念：全保留
 NON_CORE_SAMPLE_RATIO = 0.3  # 非核心：抽样比例
 
+# ===================== 关键词匹配 =====================
+def like_any(field, kws):
+    return " OR ".join([f"{field} LIKE '%{kw}%'" for kw in kws])
 
-# ===================== 构造 LIKE 条件 =====================
-def like_any(field: str, keywords: List[str]) -> str:
-    return " OR ".join([f"{field} LIKE '%{kw}%'" for kw in keywords])
 
-
-# ===================== 主处理逻辑 =====================
-def extract_chinese_teaching_kg_v2():
+# ===================== 主流程 =====================
+def extract_chinese_teaching_kg_v2_full():
     conn = duckdb.connect()
     try:
-        print("🚀 开始构建 V2 教学知识子图...")
+        print("🚀 开始 V2 全量教学知识子图抽取...")
 
-        # ---------- 1. 读取 + 初步筛选 ----------
         entity_hit = like_any("实体", CHINESE_KEYWORDS)
-        attr_hit = like_any("属性", CHINESE_KEYWORDS)
-        value_hit = like_any("值", CHINESE_KEYWORDS)
+        attr_hit   = like_any("属性", CHINESE_KEYWORDS)
+        value_hit  = like_any("值", CHINESE_KEYWORDS)
+        core_hit   = " OR ".join([f"实体 LIKE '%{c}%'" for c in CORE_CONCEPTS])
 
+        # ---------- 1. 初筛 + 打分 ----------
         conn.execute(f"""
         CREATE TEMP TABLE filtered AS
         SELECT
             *,
-            -- 命中得分（实体 > 属性 > 值）
             (
                 CASE WHEN {entity_hit} THEN 3 ELSE 0 END +
-                CASE WHEN {attr_hit} THEN 2 ELSE 0 END +
-                CASE WHEN {value_hit} THEN 1 ELSE 0 END
+                CASE WHEN {attr_hit}   THEN 2 ELSE 0 END +
+                CASE WHEN {value_hit}  THEN 1 ELSE 0 END
             ) AS match_score,
-
-            -- 是否核心教学概念
             CASE
-                WHEN {" OR ".join([f"实体 LIKE '%{c}%'" for c in CORE_CONCEPTS])}
-                THEN 1 ELSE 0
+                WHEN {core_hit} THEN 1 ELSE 0
             END AS is_core
         FROM read_csv(
             '{INPUT_CSV_PATH}',
@@ -341,55 +339,53 @@ def extract_chinese_teaching_kg_v2():
         WHERE ({entity_hit} OR {attr_hit} OR {value_hit});
         """)
 
-        total = conn.execute("SELECT COUNT(*) FROM filtered").fetchone()[0]
-        core_count = conn.execute("SELECT COUNT(*) FROM filtered WHERE is_core = 1").fetchone()[0]
+        total_hit = conn.execute("SELECT COUNT(*) FROM filtered").fetchone()[0]
+        core_cnt  = conn.execute("SELECT COUNT(*) FROM filtered WHERE is_core = 1").fetchone()[0]
 
-        print(f"📊 初筛结果：{total} 行")
-        print(f"⭐ 核心概念命中：{core_count} 行")
+        print(f"📊 初筛命中：{total_hit}")
+        print(f"⭐ 核心教学概念：{core_cnt}")
 
-        # ---------- 2. 分层抽样 ----------
-        remaining_quota = MAX_TOTAL_ROWS - core_count
-        if remaining_quota < 0:
-            remaining_quota = 0
+        # ---------- 2. 计算抽样规模 ----------
+        remaining_quota = max(0, MAX_TOTAL_ROWS - core_cnt)
+        sampled_non_core = int(min(remaining_quota, total_hit - core_cnt) * NON_CORE_SAMPLE_RATIO)
 
-        sampled_non_core = int(remaining_quota * NON_CORE_SAMPLE_RATIO)
+        print(f"📉 非核心抽样数：{sampled_non_core}")
 
+        # ---------- 3. 分层构建最终子图 ----------
         conn.execute(f"""
         CREATE TEMP TABLE final_sample AS
+
         SELECT * FROM filtered WHERE is_core = 1
 
         UNION ALL
 
-        SELECT * FROM filtered
-        WHERE is_core = 0
-        TABLESAMPLE RESERVOIR({sampled_non_core});
+        SELECT * FROM (
+            SELECT *
+            FROM filtered TABLESAMPLE RESERVOIR({sampled_non_core})
+            WHERE is_core = 0
+        );
         """)
 
-        final_count = conn.execute("SELECT COUNT(*) FROM final_sample").fetchone()[0]
+        final_cnt = conn.execute("SELECT COUNT(*) FROM final_sample").fetchone()[0]
 
-        # ---------- 3. 导出 ----------
-        safe_path = OUTPUT_CSV_PATH.replace("\\", "/")
+        # ---------- 4. 导出 ----------
         conn.execute(f"""
         COPY final_sample
-        TO '{safe_path}'
+        TO '{OUTPUT_CSV_PATH}'
         WITH (HEADER TRUE, DELIMITER ',');
         """)
 
         file_size = os.path.getsize(OUTPUT_CSV_PATH) / (1024 * 1024)
 
-        print("🎉 V2 抽取完成！")
+        print("🎉 V2 全量抽取完成")
         print(f"📄 输出文件：{OUTPUT_CSV_PATH}")
-        print(f"📈 最终行数：{final_count}")
+        print(f"📈 最终行数：{final_cnt}")
         print(f"💾 文件大小：{file_size:.2f} MB")
 
-    except Exception as e:
-        print("❌ 抽取失败：", e)
-        import traceback
-        traceback.print_exc()
     finally:
         conn.close()
 
 
 # ===================== 入口 =====================
 if __name__ == "__main__":
-    extract_chinese_teaching_kg_v2()
+    extract_chinese_teaching_kg_v2_full()
