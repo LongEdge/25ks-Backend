@@ -37,5 +37,8 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = True
 
+    #DuckDB
+    KG_CSV_PATH:str = r"resources/out_v2_chinese_teaching.csv"
+
 
 settings = Settings()

@@ -1,0 +1,6 @@
+import json
+
+row="\n{\n  \"course_topic\": \"赤壁赋\",\n  \"questions\": [\n    {\n      \"id\": 1,\n      \"type\": \"choice\",\n      \"content\": \"《赤壁赋》的作者是谁？\",\n      \"options\": [\"苏轼\", \"苏辙\", \"苏洵\", \"司马迁\"],\n      \"answer\": \"苏轼\",\n      \"explanation\": \"《赤壁赋》是北宋文学家苏轼的作品。\",\n      \"difficulty\": \"easy\"\n    },\n    {\n      \"id\": 2,\n      \"type\": \"choice\",\n      \"content\": \"《赤壁赋》分为哪两部分？\",\n      \"options\": [\"前赋和后赋\", \"上赋和下赋\", \"内赋和外赋\", \"第一赋和第二赋\"],\n      \"answer\": \"前赋和后赋\",\n      \"explanation\": \"《赤壁赋》分为《前赤壁赋》和《后赤壁赋》两部分。\",\n      \"difficulty\": \"medium\"\n    },\n    {\n      \"id\": 3,\n      \"type\": \"fill\",\n      \"content\": \"《赤壁赋》中描绘的赤壁之战发生在哪一年？\",\n      \"answer\": \"公元前207年\",\n      \"explanation\": \"赤壁之战发生在东汉末年，具体时间为公元前207年。\",\n      \"difficulty\": \"medium\"\n    },\n    {\n      \"id\": 4,\n      \"type\": \"essay\",\n      \"content\": \"《赤壁赋》中苏轼如何通过景物描写表达自己的情感？请简要分析。\",\n      \"answer\": \"苏轼通过描写赤壁的壮丽景色，如月夜泛舟、江水浩渺等，烘托出一种超脱物外、物我两忘的意境，表达了自己对自然美景的热爱和对人生短暂的感慨。\",\n      \"explanation\": \"核心采分点包括：景物描写的具体内容（月夜泛舟、江水等）、意境的烘托（超脱物外、物我两忘）、情感的抒发（对自然美景的热爱、对人生短暂的感慨）。\",\n      \"difficulty\": \"hard\"\n    }\n  ]\n}\n"
+
+data=json.loads(row)
+print(json.dumps(data, indent=4,ensure_ascii=False))

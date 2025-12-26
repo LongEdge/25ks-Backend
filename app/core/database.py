@@ -32,3 +32,22 @@ def get_db() -> Session:
         yield db
     finally:
         db.close()
+
+
+#==============================
+# DuckDB和知识图谱的连接
+#==============================
+
+import duckdb
+from functools import lru_cache
+from app.core.config import settings
+
+# 假设你在 .env 里加了：
+# KG_CSV_PATH=resources/tes/t2/out_v2_chinese_teaching.csv
+# KG_DB_PATH=data/kg.duckdb
+
+@lru_cache
+def get_duckdb():
+    con = duckdb.connect(settings.KG_DB_PATH)
+    return con
+
