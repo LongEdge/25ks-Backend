@@ -1,6 +1,5 @@
-"""
-知识图谱相关工具
-"""
+from langchain_core.tools import Tool
+
 
 #===============纯KG层===================
 
@@ -79,3 +78,22 @@ def kg_search(attr: str, value: str, limit: int = 50) -> List[Dict[str, Any]]:
     # 统一字段名
     df = df.rename(columns={"实体": "entity", "属性": "attr", "值": "value"})
     return df.to_dict(orient="records")
+
+#===========REGISTER=======================
+kg_get_entity_tool = Tool(
+    name="kg_get_entity",
+    description="查询知识图谱中某个实体的属性信息",
+    func=kg_get_entity,
+)
+
+kg_search_tool = Tool(
+    name="kg_search",
+    description="通过属性和值反向查找实体",
+    func=kg_search,
+)
+
+KG_TOOLS = [kg_get_entity_tool, kg_search_tool]
+
+"""
+知识图谱相关工具
+"""

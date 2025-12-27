@@ -12,9 +12,10 @@ SYSTEM_PROMPT="""
 - 不允许遗漏字段
 - 不允许新增未定义字段
 - 字段名、层级、类型必须严格遵循下面给定的 JSON 结构
+- 确保输出为中文，不可输出英文
 
 【JSON 输出结构】
-{
+{{
   "exercise_set_id": "string",
   "title": "string",
   "subject": "string",
@@ -26,7 +27,7 @@ SYSTEM_PROMPT="""
   "suggested_duration_minutes": number | null,
   "generated_by": "System AI",
   "exercises": [
-    {
+    {{
       "question_id": "string",
       "question_text": "string",
       "category": "选择题 | 填空题 | 判断题 | 简答题 | 计算题 | 综合题",
@@ -41,9 +42,9 @@ SYSTEM_PROMPT="""
       "cognitive_level": "记忆 | 理解 | 应用 | 分析 | 综合 | 评价",
       "required_context": "string | null",
       "suggested_time_minutes": number | null
-    }
+    }}
   ]
-}
+}}
 
 【重要】
 - exercises 数组长度必须等于请求中的 num_questions
@@ -61,10 +62,10 @@ SYSTEM_PROMPT2 = """
 - 题目数量（num_questions）：{num_questions}
 - 目标难度（target_difficulty）：{target_difficulty}
 
-{target_categories_block}
-{cognitive_distribution_block}
-{required_context_block}
-{purpose_block}
+{target_categories}
+{cognitive_distribution}
+{required_context}
+{purpose}
 
 【生成要求】
 - 题目内容符合中国中学教学语境
@@ -75,3 +76,13 @@ SYSTEM_PROMPT2 = """
 #P1规定输出的json格式
 #P2通过agent和用户对话整理得到
 
+
+
+SYSTEM_PROMPT2_WITH_MD = SYSTEM_PROMPT2 + """
+
+【用户最终确认的需求说明（Markdown，前端可编辑，具有最高优先级）】
+{confirm_md_final}
+
+【冲突处理规则】
+- 如 Markdown 与结构化字段冲突，以 Markdown 为准
+"""

@@ -1,5 +1,9 @@
+import uuid
+
 from fastapi import APIRouter, Depends, Path
 from typing import List
+
+from app.ai.langchain.utils.session import clarify_chat, apply_confirm_md, get_state
 
 router = APIRouter()
 
@@ -80,3 +84,91 @@ async def analyze_mistakes():
 async def analyze_class():
     """班级整体画像（可模拟数据）"""
     return {"message": "AI生成班级画像功能待实现"}
+
+
+#==============================================
+from app.ai.langchain.agents.ExerciseAgent import build_exercise_agent
+agent, parser = build_exercise_agent()
+@router.post("/exercise/generate")
+def generate_exercise(request: dict):
+    """
+    request 已经是：
+    - subject
+    - topic
+    - num_questions
+    - target_difficulty
+    - required_context
+    ...
+    （也就是你 SYSTEM_PROMPT2 需要的东西）
+    """
+
+    result = agent.invoke({
+        **request
+    })
+
+    # 强制结构化校验
+    exercise_set = parser.parse(result["output"])
+
+    return exercise_set.dict()
+
+
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+router = APIRouter()
+
+exercise_agent, exercise_parser = build_exercise_agent()
+
+
+class ClarifyChatIn(BaseModel):
+    session_id: str
+    message: str
+
+
+class ClarifyConfirmIn(BaseModel):
+    session_id: str
+    confirm_md_final: str
+
+
+class GenerateIn(BaseModel):
+    session_id: str
+
+
+@router.post("/exercise/clarify/chat")
+def exercise_clarify_chat(body: ClarifyChatIn):
+    assistant_reply, state = clarify_chat(body.session_id, body.message)
+    return {
+        "assistant_reply": assistant_reply,
+        "stage": state.stage,
+        "request": state.request.dict(),
+        "confirm_md": state.confirm_md,
+    }
+
+
+@router.post("/exercise/clarify/confirm")
+def exercise_clarify_confirm(body: ClarifyConfirmIn):
+    state = apply_confirm_md(body.session_id, body.confirm_md_final)
+    return {
+        "stage": state.stage,
+        "request": state.request.dict(),
+        "confirm_md_final": state.confirm_md_final,
+    }
+
+
+@router.post("/exercise/generate")
+def exercise_generate(body: GenerateIn):
+    state = get_state(body.session_id)
+    if state.stage != "generate" or not state.confirm_md_final:
+        return {"error": "请先完成澄清与确认（confirm_md_final）再生成"}
+
+    payload = {
+        **state.request.dict(),
+        "confirm_md_final": state.confirm_md_final,
+        "exercise_set_id":uuid.uuid4()
+    }
+
+    result = exercise_agent.invoke(payload)
+    exercise_set = exercise_parser.parse(result["output"])
+    return exercise_set.dict()
+
+

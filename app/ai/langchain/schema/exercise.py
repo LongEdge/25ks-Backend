@@ -255,3 +255,23 @@ class ExerciseGenerationRequest(BaseModel):
         None,
         description="请求来源标识"
     )
+
+class ExerciseRequest(BaseModel):
+    # ===== Prompt2 核心字段 =====
+    subject: str | None = None
+    topic: str | None = None
+    num_questions: int | None = None
+    target_difficulty: str | None = None
+
+    # ===== 可选但非常重要 =====
+    target_categories: list[str] | None = None
+    cognitive_distribution: dict | None = None
+    required_context: str | None = None
+    purpose: str | None = None
+
+
+class ClarifyState(BaseModel):
+    request: ExerciseRequest =Field(default_factory=ExerciseRequest)         # 结构化字段（填 Prompt2 用）
+    confirm_md: str | None = None     # LLM 生成的 Markdown 草案
+    confirm_md_final: str | None = None  # 前端编辑回传后的最终版（进入阶段2）
+    stage: Literal["clarify", "confirm", "generate"] = "clarify"
