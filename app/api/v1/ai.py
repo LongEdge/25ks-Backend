@@ -2,8 +2,10 @@ import uuid
 
 from fastapi import APIRouter, Depends, Path
 from typing import List
+from pydantic import BaseModel
 
 from app.ai.langchain.utils.session import clarify_chat, apply_confirm_md, get_state
+from app.ai.langchain.agents.ExerciseAgent import build_exercise_agent
 
 router = APIRouter()
 
@@ -87,38 +89,8 @@ async def analyze_class():
 
 
 #==============================================
-from app.ai.langchain.agents.ExerciseAgent import build_exercise_agent
-agent, parser = build_exercise_agent()
-@router.post("/exercise/generate")
-def generate_exercise(request: dict):
-    """
-    request 已经是：
-    - subject
-    - topic
-    - num_questions
-    - target_difficulty
-    - required_context
-    ...
-    （也就是你 SYSTEM_PROMPT2 需要的东西）
-    """
-
-    result = agent.invoke({
-        **request
-    })
-
-    # 强制结构化校验
-    exercise_set = parser.parse(result["output"])
-
-    return exercise_set.dict()
-
-
-from fastapi import APIRouter
-from pydantic import BaseModel
-
-router = APIRouter()
-
+# 题目生成相关API
 exercise_agent, exercise_parser = build_exercise_agent()
-
 
 class ClarifyChatIn(BaseModel):
     session_id: str
@@ -170,5 +142,3 @@ def exercise_generate(body: GenerateIn):
     result = exercise_agent.invoke(payload)
     exercise_set = exercise_parser.parse(result["output"])
     return exercise_set.dict()
-
-

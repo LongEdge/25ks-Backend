@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 
-from app.api.v1 import auth, teacher, course, lesson, resource, question, log, ai
+from app.api.v1 import auth, teacher, course, lesson, resource, question, log, ai, learning_profile
 from app.core.config import settings
 from app.core.exception_handler import register_exception_handlers
 
@@ -34,6 +34,7 @@ app.include_router(resource.router, prefix="/api/v1/resource", tags=["Resource �
 app.include_router(question.router, prefix="/api/v1/question", tags=["Question 题库模块"])
 app.include_router(log.router, prefix="/api/v1/log", tags=["Log 行为日志模块"])
 app.include_router(ai.router, prefix="/api/v1/ai", tags=["AI 智能服务模块"])
+app.include_router(learning_profile.router, prefix="/api/v1/learning_profile", tags=["Learning Profile 学习档案模块"])
 
 @app.get("/status/ping")
 async def ping():

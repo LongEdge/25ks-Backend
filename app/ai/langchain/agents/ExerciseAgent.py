@@ -6,6 +6,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.ai.langchain.prompts.EXERCISE import SYSTEM_PROMPT, SYSTEM_PROMPT2_WITH_MD
 from app.ai.langchain.schema.exercise import ExerciseSet
 from app.ai.langchain.tools.kg import KG_TOOLS
+from app.ai.langchain.tools.rag_zhipu import zhipu_rag_search
 from app.core.config import settings
 import uuid
 
@@ -22,15 +23,18 @@ def build_exercise_agent():
         ("placeholder", "{agent_scratchpad}")
     ]).partial(format_instructions=parser.get_format_instructions())
 
+    # 修复工具列表拼接问题
+    tools = KG_TOOLS + [zhipu_rag_search]
+
     agent = create_openai_tools_agent(
         llm=llm,
-        tools=KG_TOOLS,
+        tools=tools,
         prompt=prompt,
     )
 
     executor = AgentExecutor(
         agent=agent,
-        tools=KG_TOOLS,
+        tools=tools,
         verbose=True,
         handle_parsing_errors=True,
     )

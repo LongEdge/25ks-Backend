@@ -6,6 +6,7 @@ from . import resource
 from . import question
 from . import log
 from . import ai
+from . import learning_profile
 
 __all__ = [
     "auth",
@@ -15,5 +16,6 @@ __all__ = [
     "resource",
     "question",
     "log",
-    "ai"
-]
+    "ai",
+    "learning_profile"
+]
