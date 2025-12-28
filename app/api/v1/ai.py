@@ -1,8 +1,8 @@
 import uuid
+from typing import List, Optional, Dict, Any
 
-from fastapi import APIRouter, Depends, Path
-from typing import List
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Path, BackgroundTasks, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.ai.langchain.agents.LearnAnalysisAgent import get_learning_profiles, build_learning_analysis_tool
@@ -13,15 +13,267 @@ from app.ai.langchain.agents.ExerciseAgent import build_exercise_agent
 from app.core.database import get_db
 from app.service.learning_profile import get_LA
 
+# 教案生成相关导入
+from app.ai.langchain.utils.lesson_session import (
+    lesson_clarify_chat,
+    get_lesson_clarify_state,
+    update_lesson_clarify,
+    confirm_lesson_clarify,
+    reset_lesson_session,
+    LessonClarifyState
+)
+from app.ai.langchain.schema.lesson import LessonClarifySchema
+from app.core.redis_util import (
+    init_lesson_task,
+    get_lesson_task
+)
+from app.ai.langchain.orchestrator.lesson_orchestrator import create_orchestrator
+from app.ai.langchain.templates import get_default_template, list_templates
+from app.service.lesson_context import build_lesson_context
+
 router = APIRouter()
 
 
-# AI 教案生成
-@router.post("/lesson/generate")
-async def generate_lesson():
-    """根据课题/模板生成完整教案"""
-    return {"message": "AI生成教案功能待实现"}
+# ==============================================
+# 教案生成相关 API - Schema 定义
+# ==============================================
 
+class LessonClarifyChatIn(BaseModel):
+    """教案澄清对话请求"""
+    session_id: str = Field(..., description="会话 ID")
+    message: str = Field(..., description="用户消息")
+
+
+class LessonClarifyUpdateIn(BaseModel):
+    """教案澄清数据直接更新请求"""
+    session_id: str
+    clarify_data: Dict[str, Any] = Field(..., description="要更新的澄清数据")
+
+
+class LessonGenerateIn(BaseModel):
+    """触发教案生成请求"""
+    session_id: Optional[str] = Field(None, description="会话 ID（从会话获取 clarify）")
+    clarify: Optional[LessonClarifySchema] = Field(None, description="直接提供的澄清数据")
+    template_id: Optional[str] = Field(None, description="模板 ID，默认使用标准模板")
+    locked_sections: Optional[List[str]] = Field(default=[], description="锁定的章节 key 列表")
+
+
+# ==============================================
+# 教案澄清 API
+# ==============================================
+
+@router.post("/lesson/clarify/chat")
+def lesson_clarify_chat_api(
+    body: LessonClarifyChatIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    教案澄清对话
+    
+    多轮对话收集教案生成所需信息
+    """
+    assistant_reply, state = lesson_clarify_chat(body.session_id, body.message)
+    return {
+        "reply": assistant_reply,
+        "clarify": state.clarify.model_dump(),
+        "stage": state.stage,
+        "is_complete": state.stage == "confirmed"
+    }
+
+
+@router.post("/lesson/clarify/update")
+def lesson_clarify_update_api(
+    body: LessonClarifyUpdateIn,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    直接更新澄清数据
+    
+    用于前端表单直接提交场景
+    """
+    state = update_lesson_clarify(body.session_id, body.clarify_data)
+    return {
+        "clarify": state.clarify.model_dump(),
+        "stage": state.stage,
+        "is_complete": state.stage == "confirmed"
+    }
+
+
+@router.post("/lesson/clarify/confirm")
+def lesson_clarify_confirm_api(
+    session_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    确认澄清完成
+    
+    将会话状态标记为可生成
+    """
+    state = confirm_lesson_clarify(session_id)
+    return {
+        "clarify": state.clarify.model_dump(),
+        "stage": state.stage,
+        "message": "澄清已确认，可以开始生成教案"
+    }
+
+
+@router.get("/lesson/clarify/state")
+def lesson_clarify_state_api(
+    session_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取澄清会话状态
+    """
+    state = get_lesson_clarify_state(session_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "clarify": state.clarify.model_dump(),
+        "stage": state.stage,
+        "history": state.history
+    }
+
+
+@router.delete("/lesson/clarify/session")
+def lesson_clarify_reset_api(
+    session_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    重置澄清会话
+    """
+    reset_lesson_session(session_id)
+    return {"message": "Session reset successfully"}
+
+
+# ==============================================
+# 教案生成 API
+# ==============================================
+
+@router.post("/lesson/generate")
+async def lesson_generate_api(
+    body: LessonGenerateIn,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    触发教案异步生成
+    
+    返回 task_id，前端通过轮询 /lesson/generate/status 查看进度
+    """
+    # 获取澄清数据
+    clarify = None
+    if body.clarify:
+        clarify = body.clarify
+    elif body.session_id:
+        state = get_lesson_clarify_state(body.session_id)
+        if state and state.stage == "confirmed":
+            clarify = state.clarify
+    
+    if not clarify:
+        raise HTTPException(
+            status_code=400,
+            detail="请先完成澄清阶段，或直接提供 clarify 数据"
+        )
+    
+    # 检查核心字段
+    if not all([clarify.subject, clarify.grade, clarify.lesson_title]):
+        raise HTTPException(
+            status_code=400,
+            detail="缺少核心字段：subject, grade, lesson_title"
+        )
+    
+    # 生成任务 ID
+    task_id = str(uuid.uuid4())
+    
+    # 获取模板
+    template = get_default_template()
+    template_id = body.template_id or template.template_id
+    
+    # 初始化 Redis 任务
+    init_lesson_task(
+        task_id=task_id,
+        template_id=template_id,
+        teacher_id=current_user.id,
+        locked_sections=body.locked_sections or [],
+        clarify_data=clarify.model_dump()
+    )
+    
+    # 构建上下文
+    context = build_lesson_context(
+        db=db,
+        teacher_id=current_user.id,
+        clarify=clarify,
+        include_student_profile=True
+    )
+    
+    # 创建 Orchestrator
+    orchestrator = create_orchestrator(
+        task_id=task_id,
+        clarify=clarify,
+        teacher_id=current_user.id,
+        template_id=template_id,
+        student_profile=context.student_profile
+    )
+    
+    # 启动后台任务
+    background_tasks.add_task(orchestrator.run_pipeline_sync)
+    
+    return {
+        "task_id": task_id,
+        "message": "教案生成任务已启动",
+        "template_id": template_id
+    }
+
+
+@router.get("/lesson/generate/status")
+def lesson_generate_status_api(
+    task_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    查询教案生成任务状态
+    
+    返回当前进度和已生成的内容（partial_lesson）
+    """
+    task = get_lesson_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    return {
+        "task_id": task.get("task_id"),
+        "status": task.get("status"),
+        "current_stage": task.get("current_stage"),
+        "progress": task.get("progress"),
+        "partial_lesson": task.get("partial_lesson"),
+        "locked_sections": task.get("locked_sections"),
+        "error": task.get("error"),
+        "lesson_id": task.get("lesson_id")
+    }
+
+
+# ==============================================
+# 教案模板 API
+# ==============================================
+
+@router.get("/lesson/templates")
+def lesson_templates_api(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取可用的教案模板列表
+    """
+    return {
+        "templates": list_templates()
+    }
+
+
+# ==============================================
+# 其他 AI 教案功能（待实现）
+# ==============================================
 
 @router.post("/lesson/expand")
 async def expand_lesson():
