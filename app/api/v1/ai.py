@@ -3,9 +3,15 @@ import uuid
 from fastapi import APIRouter, Depends, Path
 from typing import List
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
+from app.ai.langchain.agents.LearnAnalysisAgent import get_learning_profiles, build_learning_analysis_tool
+from app.core.security import get_current_user
+from app.models.user import User
 from app.ai.langchain.utils.session import clarify_chat, apply_confirm_md, get_state
 from app.ai.langchain.agents.ExerciseAgent import build_exercise_agent
+from app.core.database import get_db
+from app.service.learning_profile import get_LA
 
 router = APIRouter()
 
@@ -142,3 +148,40 @@ def exercise_generate(body: GenerateIn):
     result = exercise_agent.invoke(payload)
     exercise_set = exercise_parser.parse(result["output"])
     return exercise_set.dict()
+
+# @router.post("/lesson/clarify")
+# def lesson_clarify(body: ClarifyChatIn):
+#     assistant_reply, state = lesson_clarify_chat(body.session_id, body.message)
+#     return {
+#         "assistant_reply": assistant_reply,
+#         "stage": state.stage,
+#         "request": state.request.dict(),
+#         "confirm_md": state.confirm_md,
+#     }
+
+@router.get("/lps/analyze")
+def lps_analyze(msg: str,
+                db: Session = Depends(get_db),
+                current_user: User = Depends(get_current_user)
+                ):
+    return get_LA(db=db,teacher=current_user,msg=msg)
+
+@router.post("/lps/test")
+def lps_analyze(msg: str,
+                db: Session = Depends(get_db),
+                current_user: User = Depends(get_current_user)
+                ):
+    print(current_user.id)
+    return get_learning_profiles(db=db, current_user=current_user)
+
+#==============================================
+@router.get("/lps/analyze")
+def lps_analyze(
+    msg: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    la_tool = build_learning_analysis_tool(db, current_user)
+
+    # 直接调用（不通过 Agent）
+    return la_tool.run(msg)

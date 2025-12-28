@@ -84,6 +84,11 @@ class LearningProfile(BaseModel):
         description="学情来源（teacher / system / ai）"
     )
 
+
+class LearningProfilesSet(BaseModel):
+    teacher_id:str=Field(..., description="Teacher ID")
+    lps:List[LearningProfile]=Field(..., description="学情集合")
+
 """
 EXAMPLE:
 {

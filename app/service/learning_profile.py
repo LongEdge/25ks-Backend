@@ -1,7 +1,9 @@
 import json
 from sqlalchemy.orm import Session
 
+from app.ai.langchain.schema.learning_profiles import LearningProfilesSet, LearningProfile
 from app.models.learning_profiles_model import LearningProfileModel
+from app.models.user import User
 from app.schema.learning_profiles_schema import LearningProfileCreate
 
 
@@ -69,3 +71,26 @@ def delete_learning_profile(db: Session, profile_id: int, teacher_id: int):
     db.delete(profile)
     db.commit()
     return True
+
+def get_LA(db: Session, teacher:User,msg:str):
+    from app.ai.langchain.agents.LearnAnalysisAgent import get_LA_chain
+    chain=get_LA_chain(db, teacher)
+    result=chain.invoke({"input":msg})
+    return result
+
+def build_learning_profiles_set(
+    db: Session,
+    teacher_id: int
+) -> LearningProfilesSet:
+    models = list_learning_profiles(db=db, teacher_id=teacher_id)
+
+    learning_profiles = [
+        LearningProfile.model_validate_json(m.profile_json)
+        for m in models
+    ]
+
+    return LearningProfilesSet(
+        teacher_id=str(teacher_id),
+        lps=learning_profiles
+    )
+

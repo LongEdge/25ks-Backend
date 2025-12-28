@@ -20,21 +20,16 @@ def _get_llm(temp: float = 0.2):
     return ChatZhipuAI(model="glm-4", temperature=temp,zhipuai_api_key=settings.AI_API_KEY)
 
 
-def get_or_create_session(session_id: str) -> Dict:
+def get_or_create_session(session_id: str,prompt:str) -> Dict:
     if session_id not in _SESSIONS:
         memory = ConversationBufferMemory(
             return_messages=True,
             memory_key="history"
         )
-        # chain = ConversationChain(
-        #     llm=_get_llm(0.2),
-        #     memory=memory,
-        #     system_prompt=CLARIFY_SYSTEM_PROMPT,
-        # )
         chain = ConversationChain(
             llm=_get_llm(0.2),
             memory=memory,
-            prompt=CLARIFY_PROMPT,  # ✅ 正确用法
+            prompt=prompt,  # ✅ 正确用法
         )
         _SESSIONS[session_id] = {
             "chain": chain,
@@ -44,8 +39,10 @@ def get_or_create_session(session_id: str) -> Dict:
     return _SESSIONS[session_id]
 
 
+#===========================================================#===========================================================
+
 def clarify_chat(session_id: str, user_message: str) -> Tuple[str, ClarifyState]:
-    sess = get_or_create_session(session_id)
+    sess = get_or_create_session(session_id,CLARIFY_PROMPT)
     chain: ConversationChain = sess["chain"]
     state: ClarifyState = sess["state"]
 
@@ -91,7 +88,7 @@ def summarize_to_request_and_md(sess: Dict) -> ClarifyState:
 
 
 def apply_confirm_md(session_id: str, confirm_md_final: str) -> ClarifyState:
-    sess = get_or_create_session(session_id)
+    sess = get_or_create_session(session_id,CLARIFY_PROMPT)
     state: ClarifyState = sess["state"]
     state.confirm_md_final = confirm_md_final
     state.stage = "generate"
@@ -100,4 +97,9 @@ def apply_confirm_md(session_id: str, confirm_md_final: str) -> ClarifyState:
 
 
 def get_state(session_id: str) -> ClarifyState:
-    return get_or_create_session(session_id)["state"]
+    return get_or_create_session(session_id,CLARIFY_PROMPT)["state"]
+
+#===========================================================#===========================================================
+
+
+

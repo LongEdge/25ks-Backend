@@ -48,7 +48,7 @@ class ZhipuKnowledgeRetriever(BaseRetriever):
 retriever = ZhipuKnowledgeRetriever(
     api_key=TEST_KEY,
     knowledge_ids=["1999002185098272768"],
-    top_k=8,
+    top_k=5,
     recall_method="mixed",
     rerank=True,
 )
