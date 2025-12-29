@@ -302,3 +302,4 @@ def get_section_prompt(stage: str) -> ChatPromptTemplate:
     if stage not in SECTION_PROMPTS:
         raise ValueError(f"未知的章节: {stage}")
     return SECTION_PROMPTS[stage]
+

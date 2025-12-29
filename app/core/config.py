@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     REDIS_URL: str = "localhost:6379"
     REDIS_KEY: str = "REDACTED"
 
+    # 智谱 AI 配置
+    ZHIPU_API_KEY: str = "REMOVED_ZHIPU_API_KEY"
+    ZHIPU_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
+
     class Config:
         env_file = ".env"
         case_sensitive = True
