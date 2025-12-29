@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -7,7 +7,7 @@ class UserBase(BaseModel):
     """用户基础模型"""
     username: str = Field(..., min_length=3, max_length=50, description="用户名（3-50个字符）")
     email: EmailStr = Field(..., description="邮箱")
-    full_name: Optional[str] = Field(None, max_length=100, description="真实姓名(可选，最大100个字符)")
+    full_name: Optional[str] = Field(None, max_length=100, description="真实姓名")
 
 
 class UserCreate(UserBase):
@@ -17,8 +17,8 @@ class UserCreate(UserBase):
 
 class UserLogin(BaseModel):
     """用户登录模型"""
-    username: str = Field(..., description="用户名（3-50个字符）")
-    password: str = Field(..., description="密码（6-50个字符）")
+    username: str = Field(..., description="用户名")
+    password: str = Field(..., description="密码")
 
 
 class UserResponse(UserBase):
@@ -32,6 +32,64 @@ class UserResponse(UserBase):
     class Config:
         from_attributes = True
 
+
+# ==============================================
+# 教师档案相关 Schema
+# ==============================================
+
+class UserProfileResponse(BaseModel):
+    """用户完整档案响应"""
+    id: int
+    username: str
+    email: str
+    full_name: Optional[str] = None
+    role: str
+    
+    # 教师信息
+    avatar_url: Optional[str] = None
+    phone: Optional[str] = None
+    subject: Optional[str] = None
+    teaching_style: Optional[List[str]] = None
+    personal_desc: Optional[str] = None
+    years_of_experience: Optional[int] = None
+    school: Optional[str] = None
+    title: Optional[str] = None
+    
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class UserProfileUpdate(BaseModel):
+    """用户档案更新请求"""
+    full_name: Optional[str] = Field(None, max_length=100, description="真实姓名")
+    phone: Optional[str] = Field(None, max_length=20, description="手机号")
+    subject: Optional[str] = Field(None, max_length=50, description="教授学科")
+    teaching_style: Optional[List[str]] = Field(None, description="教学风格")
+    personal_desc: Optional[str] = Field(None, description="个人简介")
+    years_of_experience: Optional[int] = Field(None, ge=0, le=50, description="教龄")
+    school: Optional[str] = Field(None, max_length=100, description="所在学校")
+    title: Optional[str] = Field(None, max_length=50, description="职称")
+
+
+class PasswordUpdate(BaseModel):
+    """密码修改请求"""
+    old_password: str = Field(..., min_length=6, description="旧密码")
+    new_password: str = Field(..., min_length=6, max_length=50, description="新密码")
+
+
+class AvatarResponse(BaseModel):
+    """头像上传响应"""
+    avatar_url: str = Field(..., description="头像 URL")
+    message: str = Field(default="头像上传成功")
+
+
+# ==============================================
+# Token 相关
+# ==============================================
 
 class Token(BaseModel):
     """令牌响应模型"""

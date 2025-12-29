@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 
-from app.api.v1 import auth, teacher, course, lesson, resource, ai, learning_profile, media
+from app.api.v1 import auth, lesson, ai, learning_profile, media
 from app.core.config import settings
 from app.core.exception_handler import register_exception_handlers
 
@@ -27,10 +27,7 @@ app.add_middleware(
 
 # 注册路由
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth 认证模块"])
-app.include_router(teacher.router, prefix="/api/v1/teacher", tags=["Teacher 教师信息模块"])
-app.include_router(course.router, prefix="/api/v1/course", tags=["Course 课程模块"])
 app.include_router(lesson.router, prefix="/api/v1/lesson", tags=["Lesson 教案模块"])
-app.include_router(resource.router, prefix="/api/v1/resource", tags=["Resource 教学资源模块"])
 app.include_router(ai.router, prefix="/api/v1/ai", tags=["AI 智能服务模块"])
 app.include_router(learning_profile.router, prefix="/api/v1/learning_profile", tags=["Learning Profile 学习档案模块"])
 app.include_router(media.router, prefix="/api/v1/media", tags=["Media 媒体生成模块"])

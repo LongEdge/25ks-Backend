@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     ZHIPU_API_KEY: str = "REMOVED_ZHIPU_API_KEY"
     ZHIPU_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
 
+    # 阿里云 OSS 配置
+    ALIYUN_ACCESS_KEY_ID: str = "REMOVED_ALIYUN_ACCESS_KEY_ID"
+    ALIYUN_ACCESS_KEY_SECRET: str = "REMOVED_ALIYUN_ACCESS_KEY_SECRET"
+    ALIYUN_OSS_ENDPOINT: str = "oss-cn-example.aliyuncs.com"
+    ALIYUN_OSS_BUCKET: str = "REDACTED"
+    ALIYUN_OSS_DOMAIN: str = "https://example-bucket.oss-cn-example.aliyuncs.com"
+
     class Config:
         env_file = ".env"
         case_sensitive = True
