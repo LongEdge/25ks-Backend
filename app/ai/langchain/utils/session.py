@@ -76,8 +76,19 @@ def summarize_to_request_and_md(sess: Dict) -> ClarifyState:
         state.confirm_md = "解析失败：模型输出未按协议返回。请重试：`请生成需求确认文档`"
         return state
 
-    # 解析 request
-    req = ExerciseRequest.model_validate_json(json_part)
+    # 解析 request（添加容错处理）
+    import json
+    try:
+        json_data = json.loads(json_part)
+        # 容错：如果 cognitive_distribution 是列表，转为 null
+        if isinstance(json_data.get("cognitive_distribution"), list):
+            json_data["cognitive_distribution"] = None
+        req = ExerciseRequest.model_validate(json_data)
+    except json.JSONDecodeError:
+        # JSON 解析失败
+        state = ClarifyState(stage="clarify")
+        state.confirm_md = "解析失败：JSON 格式错误。请重试：`请生成需求确认文档`"
+        return state
 
     state = ClarifyState(
         request=req,

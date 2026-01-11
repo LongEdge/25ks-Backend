@@ -23,6 +23,11 @@ SUMMARY_PROMPT = """
 - 字段仅限：
   subject, topic, num_questions, target_difficulty,
   target_categories, cognitive_distribution, required_context, purpose
+- 重要格式说明：
+  * target_categories: 字符串数组，如 ["选择题", "填空题"]
+  * cognitive_distribution: 字典对象（非数组），格式为 {"认知层级": 数量}，
+    认知层级仅限：记忆、理解、应用、分析、综合、评价
+    例如：{"理解": 4, "应用": 6} 或 null（如果未指定）
 
 2) CONFIRM_MD：
 - 一份用户可阅读/可编辑的 Markdown 需求确认文档
