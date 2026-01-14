@@ -50,16 +50,11 @@ class LessonClarifyChatIn(BaseModel):
     message: str = Field(..., description="用户消息")
 
 
-class LessonClarifyConfirmIn(BaseModel):
-    """教案澄清确认请求"""
-    session_id: str = Field(..., description="会话 ID")
-    confirm_md_final: str = Field(..., description="用户确认的最终说明（Markdown 格式）")
-
-
 class LessonGenerateIn(BaseModel):
     """触发教案生成请求"""
     session_id: Optional[str] = Field(None, description="会话 ID（从会话获取 clarify）")
     clarify: Optional[LessonClarifySchema] = Field(None, description="直接提供的澄清数据")
+    confirm_md_final: Optional[str] = Field(None, description="用户确认的最终说明（对话模式时提供）")
     template_id: Optional[str] = Field(None, description="模板 ID，默认使用标准模板")
     locked_sections: Optional[List[str]] = Field(default=[], description="锁定的章节 key 列表")
 
@@ -88,23 +83,6 @@ def lesson_clarify_chat_api(
     }
 
 
-@router.post("/lesson/clarify/confirm")
-def lesson_clarify_confirm_api(
-    body: LessonClarifyConfirmIn,
-    current_user: User = Depends(get_current_user)
-):
-    """
-    确认澄清完成
-    
-    将会话状态标记为可生成，并记录用户的最终确认说明
-    """
-    state = confirm_lesson_clarify(body.session_id, body.confirm_md_final)
-    return {
-        "clarify": state.clarify.model_dump(),
-        "stage": state.stage,
-        "confirm_md_final": state.confirm_md_final,
-        "message": "澄清已确认，可以开始生成教案"
-    }
 
 
 @router.get("/lesson/clarify/state")
@@ -149,26 +127,33 @@ async def lesson_generate_api(
     current_user: User = Depends(get_current_user)
 ):
     """
-    触发教案异步生成
+    触发教案异步生成（包含确认功能）
     
     支持两种模式：
     1. **对话模式**：通过 session_id 从澄清会话中获取数据
-       - 前置条件：已调用 /chat 和 /confirm
-       - 请求示例：{"session_id": "xxx"}
+       - 会自动确认会话并记录 confirm_md_final（可选）
+       - 请求示例：{"session_id": "xxx", "confirm_md_final": "..."}
     
-    2. **直接模式**：直接提供完整的澄清数据（跳过对话流程）
+    2. **直接模式**：直接提供完整的澄清数据（跳过对话和确认）
        - 适合需求明确的场景
-       - 请求示例：{"clarify": {"subject": "数学", "grade": "初一", ...}}
+       - 请求示例：{"clarify": {...}}
     
     返回 task_id，前端通过轮询 /lesson/generate/status 查看进度
     """
     # 获取澄清数据
     clarify = None
+    
     if body.clarify:
+        # 直接模式：使用提供的 clarify
         clarify = body.clarify
     elif body.session_id:
+        # 对话模式：从会话获取并自动确认
         state = get_lesson_clarify_state(body.session_id)
-        if state and state.stage == "confirmed":
+        if state:
+            # 如果提供了 confirm_md_final，执行确认
+            if body.confirm_md_final:
+                state = confirm_lesson_clarify(body.session_id, body.confirm_md_final)
+            
             clarify = state.clarify
     
     if not clarify:
