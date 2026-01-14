@@ -5,6 +5,7 @@
 提供教案的增删改查功能
 """
 from typing import List, Optional, Dict, Any
+import redis
 
 from fastapi import APIRouter, Depends, Path, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -14,6 +15,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.lesson_model import LessonModel
+from app.core.redis_util import get_redis_client, LESSON_TASK_PREFIX
+import json
 
 router = APIRouter()
 
@@ -64,7 +67,85 @@ class LessonSectionUpdateIn(BaseModel):
     lock: Optional[bool] = Field(default=None, description="是否锁定该章节")
 
 
+class GeneratingTaskResponse(BaseModel):
+    """正在生成的任务响应"""
+    task_id: str
+    status: str
+    current_stage: Optional[str] = None
+    progress: float
+    partial_lesson: Dict[str, Any]
+    locked_sections: List[str]
+    error: Optional[str] = None
+    lesson_id: Optional[int] = None
+    template_id: str
+    teacher_id: int
+    clarify_data: Dict[str, Any]
+
+
+class AllLessonsResponse(BaseModel):
+    """所有教案响应"""
+    generating: List[GeneratingTaskResponse]
+    completed: List[Dict[str, Any]]
+
+
 # ========== CRUD 接口 ==========
+
+@router.get("/all")
+async def get_all_lessons(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    获取教师的所有教案（包括正在生成和已生成的）
+    
+    返回：
+    - generating: 正在生成的教案列表（从Redis读取）
+    - completed: 已生成的教案列表（从数据库读取）
+    """
+    result = {
+        "generating": [],
+        "completed": []
+    }
+    
+    # 1. 从 Redis 获取正在生成的任务
+    try:
+        redis_client = get_redis_client()
+        # 获取所有 lesson:gen:* 的 key
+        pattern = f"{LESSON_TASK_PREFIX}*"
+        keys = redis_client.keys(pattern)
+        
+        for key in keys:
+            data = redis_client.get(key)
+            if data:
+                task_data = json.loads(data)
+                # 只返回当前教师的任务
+                if task_data.get("teacher_id") == current_user.id:
+                    result["generating"].append({
+                        "task_id": task_data.get("task_id"),
+                        "status": task_data.get("status"),
+                        "current_stage": task_data.get("current_stage"),
+                        "progress": task_data.get("progress"),
+                        "partial_lesson": task_data.get("partial_lesson", {}),
+                        "locked_sections": task_data.get("locked_sections", []),
+                        "error": task_data.get("error"),
+                        "lesson_id": task_data.get("lesson_id"),
+                        "template_id": task_data.get("template_id"),
+                        "teacher_id": task_data.get("teacher_id"),
+                        "clarify_data": task_data.get("clarify_data", {})
+                    })
+    except Exception as e:
+        # Redis 连接失败时记录错误但不影响数据库查询
+        print(f"Redis error: {e}")
+    
+    # 2. 从数据库获取已生成的教案
+    lessons = db.query(LessonModel).filter(
+        LessonModel.teacher_id == current_user.id
+    ).order_by(LessonModel.updated_at.desc()).all()
+    
+    result["completed"] = [lesson.to_dict() for lesson in lessons]
+    
+    return result
+
 
 @router.get("/list")
 async def get_lesson_list(
