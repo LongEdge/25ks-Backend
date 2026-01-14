@@ -24,7 +24,6 @@ from app.service.exercise_service import (
 from app.ai.langchain.utils.lesson_session import (
     lesson_clarify_chat,
     get_lesson_clarify_state,
-    update_lesson_clarify,
     confirm_lesson_clarify,
     reset_lesson_session,
     LessonClarifyState
@@ -49,12 +48,6 @@ class LessonClarifyChatIn(BaseModel):
     """教案澄清对话请求"""
     session_id: str = Field(..., description="会话 ID")
     message: str = Field(..., description="用户消息")
-
-
-class LessonClarifyUpdateIn(BaseModel):
-    """教案澄清数据直接更新请求"""
-    session_id: str
-    clarify_data: LessonClarifySchema = Field(..., description="要更新的澄清数据")
 
 
 class LessonClarifyConfirmIn(BaseModel):
@@ -89,27 +82,6 @@ def lesson_clarify_chat_api(
     assistant_reply, state = lesson_clarify_chat(body.session_id, body.message)
     return {
         "reply": assistant_reply,
-        "clarify": state.clarify.model_dump(),
-        "stage": state.stage,
-        "is_complete": state.stage == "confirmed"
-    }
-
-
-@router.post("/lesson/clarify/update")
-def lesson_clarify_update_api(
-    body: LessonClarifyUpdateIn,
-    current_user: User = Depends(get_current_user)
-):
-    """
-    直接更新澄清数据
-    
-    用于前端表单直接提交场景
-    """
-    state = update_lesson_clarify(
-        body.session_id, 
-        body.clarify_data.model_dump(exclude_none=True)
-    )
-    return {
         "clarify": state.clarify.model_dump(),
         "stage": state.stage,
         "is_complete": state.stage == "confirmed"
@@ -178,6 +150,15 @@ async def lesson_generate_api(
 ):
     """
     触发教案异步生成
+    
+    支持两种模式：
+    1. **对话模式**：通过 session_id 从澄清会话中获取数据
+       - 前置条件：已调用 /chat 和 /confirm
+       - 请求示例：{"session_id": "xxx"}
+    
+    2. **直接模式**：直接提供完整的澄清数据（跳过对话流程）
+       - 适合需求明确的场景
+       - 请求示例：{"clarify": {"subject": "数学", "grade": "初一", ...}}
     
     返回 task_id，前端通过轮询 /lesson/generate/status 查看进度
     """

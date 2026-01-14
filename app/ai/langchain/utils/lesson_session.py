@@ -251,21 +251,6 @@ def get_lesson_clarify_state(session_id: str) -> Optional[LessonClarifyState]:
     return None
 
 
-def update_lesson_clarify(session_id: str, clarify_data: Dict[str, Any]) -> LessonClarifyState:
-    """
-    直接更新澄清数据（用于用户直接提交表单）
-    """
-    sess = _get_or_create_session(session_id)
-    state: LessonClarifyState = sess["state"]
-    
-    state.clarify = merge_clarify(state.clarify, clarify_data)
-    
-    if _is_clarify_complete(state.clarify):
-        state.stage = "confirmed"
-    
-    sess["state"] = state
-    return state
-
 
 def confirm_lesson_clarify(session_id: str, confirm_md_final: str) -> LessonClarifyState:
     """确认澄清完成，进入可生成状态，并记录用户的最终确认说明"""
