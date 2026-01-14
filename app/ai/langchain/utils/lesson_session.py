@@ -37,7 +37,7 @@ _LESSON_SESSIONS: Dict[str, Dict] = {}
 def _get_llm(temperature: float = 0.3):
     """获取 LLM 实例"""
     return ChatZhipuAI(
-        model="glm-4",
+        model="glm-4-flashx-250414",
         temperature=temperature,
         zhipuai_api_key=settings.AI_API_KEY
     )

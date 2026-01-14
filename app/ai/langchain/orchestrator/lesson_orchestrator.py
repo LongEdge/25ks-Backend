@@ -61,7 +61,7 @@ class LessonOrchestrator:
         
         # 初始化 LLM
         self.llm = ChatZhipuAI(
-            model="glm-4",
+            model="glm-4-flashx-250414",
             temperature=0.3,
             zhipuai_api_key=settings.AI_API_KEY
         )

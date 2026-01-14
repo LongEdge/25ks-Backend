@@ -46,7 +46,7 @@ class UserProfileResponse(BaseModel):
     role: str
     
     # 教师信息
-    avatar_url: Optional[str] = None
+    avatar_base64: Optional[str] = None
     phone: Optional[str] = None
     subject: Optional[str] = None
     teaching_style: Optional[List[str]] = None
@@ -83,7 +83,7 @@ class PasswordUpdate(BaseModel):
 
 class AvatarResponse(BaseModel):
     """头像上传响应"""
-    avatar_url: str = Field(..., description="头像 URL")
+    avatar_base64: str = Field(..., description="头像 Base64 编码")
     message: str = Field(default="头像上传成功")
 
 

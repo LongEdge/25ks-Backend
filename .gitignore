@@ -37,3 +37,8 @@ build/
 dist/
 *.egg-info/
 *.csv
+*.db
+*.md
+*.*db
+*.pdf
+*.sql

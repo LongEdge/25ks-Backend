@@ -204,8 +204,8 @@ async def upload_avatar(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """上传头像到阿里云 OSS"""
-    from app.core.oss_service import oss_service
+    """上传头像（转换为 Base64 存储）"""
+    import base64
     
     # 验证文件类型
     allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
@@ -224,24 +224,18 @@ async def upload_avatar(
             detail="文件大小超过限制（最大 5MB）"
         )
     
-    # 获取文件扩展名
-    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
-    
     try:
-        # 删除旧头像（如果存在）
-        if current_user.avatar_url:
-            old_path = oss_service.get_file_path_from_url(current_user.avatar_url)
-            if old_path:
-                oss_service.delete_file(old_path)
+        # 将图片内容转换为 Base64 编码
+        base64_content = base64.b64encode(contents).decode('utf-8')
         
-        # 上传新头像到 OSS
-        avatar_url = oss_service.upload_avatar(contents, current_user.id, ext)
+        # 构建 Data URL 格式（包含 MIME 类型）
+        avatar_base64 = f"data:{file.content_type};base64,{base64_content}"
         
-        # 更新用户头像 URL
-        current_user.avatar_url = avatar_url
+        # 更新用户头像
+        current_user.avatar_base64 = avatar_base64
         db.commit()
         
-        return AvatarResponse(avatar_url=avatar_url)
+        return AvatarResponse(avatar_base64=avatar_base64)
         
     except Exception as e:
         db.rollback()

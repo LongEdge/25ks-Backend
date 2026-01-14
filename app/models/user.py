@@ -15,7 +15,7 @@ class User(BaseModel):
     role = Column(String(20), default="teacher", comment="角色：admin/teacher")
     
     # 教师信息字段
-    avatar_url = Column(String(500), nullable=True, comment="头像URL")
+    avatar_base64 = Column(Text, nullable=True, comment="头像Base64编码")
     phone = Column(String(20), nullable=True, comment="手机号")
     subject = Column(String(50), nullable=True, comment="教授学科")
     teaching_style = Column(JSON, nullable=True, comment="教学风格")
