@@ -54,7 +54,13 @@ class LessonClarifyChatIn(BaseModel):
 class LessonClarifyUpdateIn(BaseModel):
     """教案澄清数据直接更新请求"""
     session_id: str
-    clarify_data: Dict[str, Any] = Field(..., description="要更新的澄清数据")
+    clarify_data: LessonClarifySchema = Field(..., description="要更新的澄清数据")
+
+
+class LessonClarifyConfirmIn(BaseModel):
+    """教案澄清确认请求"""
+    session_id: str = Field(..., description="会话 ID")
+    confirm_md_final: str = Field(..., description="用户确认的最终说明（Markdown 格式）")
 
 
 class LessonGenerateIn(BaseModel):
@@ -99,7 +105,10 @@ def lesson_clarify_update_api(
     
     用于前端表单直接提交场景
     """
-    state = update_lesson_clarify(body.session_id, body.clarify_data)
+    state = update_lesson_clarify(
+        body.session_id, 
+        body.clarify_data.model_dump(exclude_none=True)
+    )
     return {
         "clarify": state.clarify.model_dump(),
         "stage": state.stage,
@@ -109,18 +118,19 @@ def lesson_clarify_update_api(
 
 @router.post("/lesson/clarify/confirm")
 def lesson_clarify_confirm_api(
-    session_id: str,
+    body: LessonClarifyConfirmIn,
     current_user: User = Depends(get_current_user)
 ):
     """
     确认澄清完成
     
-    将会话状态标记为可生成
+    将会话状态标记为可生成，并记录用户的最终确认说明
     """
-    state = confirm_lesson_clarify(session_id)
+    state = confirm_lesson_clarify(body.session_id, body.confirm_md_final)
     return {
         "clarify": state.clarify.model_dump(),
         "stage": state.stage,
+        "confirm_md_final": state.confirm_md_final,
         "message": "澄清已确认，可以开始生成教案"
     }
 

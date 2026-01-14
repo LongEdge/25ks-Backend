@@ -27,6 +27,7 @@ class LessonClarifyState(BaseModel):
     clarify: LessonClarifySchema = Field(default_factory=LessonClarifySchema)
     stage: str = Field(default="clarify", description="当前阶段: clarify/confirmed")
     history: List[Dict[str, str]] = Field(default_factory=list, description="对话历史")
+    confirm_md_final: Optional[str] = Field(None, description="用户确认的最终说明")
 
 
 # ========== 会话存储（进程内，速度优先） ==========
@@ -266,11 +267,12 @@ def update_lesson_clarify(session_id: str, clarify_data: Dict[str, Any]) -> Less
     return state
 
 
-def confirm_lesson_clarify(session_id: str) -> LessonClarifyState:
-    """确认澄清完成，进入可生成状态"""
+def confirm_lesson_clarify(session_id: str, confirm_md_final: str) -> LessonClarifyState:
+    """确认澄清完成，进入可生成状态，并记录用户的最终确认说明"""
     sess = _get_or_create_session(session_id)
     state: LessonClarifyState = sess["state"]
     state.stage = "confirmed"
+    state.confirm_md_final = confirm_md_final
     sess["state"] = state
     return state
 
