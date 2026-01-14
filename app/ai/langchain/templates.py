@@ -124,17 +124,33 @@ _TEMPLATE_REGISTRY = {
 }
 
 
-def get_template(template_id: str) -> Optional[LessonTemplate]:
+def get_template(template_id: str, db=None) -> Optional[LessonTemplate]:
     """
     获取模板
     
+    优先从数据库查询自定义模板，如果未找到则回退到内置模板
+    
     Args:
         template_id: 模板 ID
+        db: 数据库会话（可选）
         
     Returns:
         模板对象，不存在返回 None
     """
+    # 1. 如果提供了 db，先查询数据库
+    if db:
+        from app.models.lesson_template_model import LessonTemplateModel
+        db_template = db.query(LessonTemplateModel).filter(
+            LessonTemplateModel.template_id == template_id
+        ).first()
+        
+        if db_template:
+            # 转换为 LessonTemplate 对象
+            return db_model_to_template(db_template)
+    
+    # 2. 回退到内置模板注册表
     return _TEMPLATE_REGISTRY.get(template_id)
+
 
 
 def get_default_template() -> LessonTemplate:
@@ -158,3 +174,28 @@ def list_templates() -> list:
         {"id": t.template_id, "name": t.name, "description": t.description}
         for t in _TEMPLATE_REGISTRY.values()
     ]
+
+
+def db_model_to_template(db_model) -> LessonTemplate:
+    """
+    将数据库模型转换为 LessonTemplate 对象
+    
+    Args:
+        db_model: LessonTemplateModel 实例
+        
+    Returns:
+        LessonTemplate 对象
+    """
+    # 转换 sections JSON 为 LessonTemplateSection 对象列表
+    sections = [
+        LessonTemplateSection(**section_data)
+        for section_data in db_model.sections
+    ]
+    
+    return LessonTemplate(
+        template_id=db_model.template_id,
+        name=db_model.name,
+        description=db_model.description,
+        sections=sections
+    )
+

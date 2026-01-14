@@ -248,10 +248,15 @@ def create_orchestrator(
     """
     from app.ai.langchain.templates import get_template
     
-    # 获取模板
+    # 获取模板（优先从数据库查询自定义模板）
+    from app.core.database import SessionLocal
     template = None
     if template_id:
-        template = get_template(template_id)
+        db = SessionLocal()
+        try:
+            template = get_template(template_id, db=db)
+        finally:
+            db.close()
     if not template:
         template = get_default_template()
     
