@@ -124,23 +124,29 @@ def _try_extract_clarify_info(user_message: str, llm) -> Optional[Dict[str, Any]
     使用 LLM 解析用户输入，提取结构化信息
     """
     extract_prompt = f"""
-从以下用户输入中提取教案相关信息，输出 JSON 格式。
-只提取明确提到的信息，不要推测。如果某个字段没有提到，不要包含在输出中。
+从以下用户输入中提取教案相关信息,输出 JSON 格式。
+只提取明确提到的信息,不要推测。如果某个字段没有提到,不要包含在输出中。
 
-用户输入：{user_message}
+用户输入:{user_message}
 
-可提取的字段：
+可提取的字段:
 - subject: 学科
 - grade: 年级  
 - lesson_title: 课题名称
-- lesson_type: 课程类型（新授/复习/实验/综合）
-- class_duration: 课时长度（分钟）
-- lesson_count: 课时数
+- lesson_type: 课程类型(新授/复习/实验/综合)
+- class_duration: 课时长度(分钟),**必须是纯数字**,例如 45 表示45分钟
+- lesson_count: 课时数,**必须是纯数字**,例如 2 表示2课时
 - teaching_goal_focus: 教学侧重点
 - difficulty_level: 难度水平
 - notes: 补充说明
 
-只输出 JSON，不要有其他内容。如果没有可提取的信息，输出空对象 {{}}
+**重要格式要求**:
+1. class_duration 和 lesson_count 必须是整数,不能包含单位(如"分钟"、"课时"等)
+2. 如果用户说"2小时",class_duration 应该输出 120(分钟)
+3. 如果用户说"45分钟",class_duration 应该输出 45
+4. 如果用户说"2课时",lesson_count 应该输出 2
+
+只输出 JSON,不要有其他内容。如果没有可提取的信息,输出空对象 {{}}
 """
     try:
         result = llm.invoke(extract_prompt)
@@ -157,6 +163,56 @@ def _try_extract_clarify_info(user_message: str, llm) -> Optional[Dict[str, Any]
         return None
 
 
+def _sanitize_clarify_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    清洗澄清数据，处理 LLM 可能返回的带单位字符串
+    
+    Args:
+        data: 原始数据字典
+        
+    Returns:
+        清洗后的数据字典
+    """
+    import re
+    
+    sanitized = data.copy()
+    
+    # 处理 class_duration: "2小时" -> 120, "45分钟" -> 45
+    if "class_duration" in sanitized and isinstance(sanitized["class_duration"], str):
+        duration_str = sanitized["class_duration"]
+        
+        # 尝试提取小时
+        hour_match = re.search(r'(\d+(?:\.\d+)?)\s*小时', duration_str)
+        if hour_match:
+            sanitized["class_duration"] = int(float(hour_match.group(1)) * 60)
+        else:
+            # 尝试提取分钟
+            minute_match = re.search(r'(\d+(?:\.\d+)?)\s*分钟?', duration_str)
+            if minute_match:
+                sanitized["class_duration"] = int(float(minute_match.group(1)))
+            else:
+                # 尝试直接提取数字
+                number_match = re.search(r'(\d+)', duration_str)
+                if number_match:
+                    sanitized["class_duration"] = int(number_match.group(1))
+                else:
+                    # 无法解析，设为 None
+                    sanitized["class_duration"] = None
+    
+    # 处理 lesson_count: "2课时" -> 2
+    if "lesson_count" in sanitized and isinstance(sanitized["lesson_count"], str):
+        count_str = sanitized["lesson_count"]
+        
+        # 提取数字
+        number_match = re.search(r'(\d+)', count_str)
+        if number_match:
+            sanitized["lesson_count"] = int(number_match.group(1))
+        else:
+            sanitized["lesson_count"] = None
+    
+    return sanitized
+
+
 def merge_clarify(existing: LessonClarifySchema, new_data: Dict[str, Any]) -> LessonClarifySchema:
     """
     合并澄清数据
@@ -166,9 +222,12 @@ def merge_clarify(existing: LessonClarifySchema, new_data: Dict[str, Any]) -> Le
     2. 新的非空值覆盖旧值
     3. 返回合并后的新对象
     """
+    # 先清洗数据
+    sanitized_data = _sanitize_clarify_data(new_data)
+    
     existing_dict = existing.model_dump()
     
-    for key, new_value in new_data.items():
+    for key, new_value in sanitized_data.items():
         if new_value is not None and key in existing_dict:
             existing_dict[key] = new_value
     
