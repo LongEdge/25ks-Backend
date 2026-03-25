@@ -5,8 +5,7 @@ from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.tools import tool
 from pydantic import Field
-
-TEST_KEY="REMOVED_ZHIPU_API_KEY"
+from app.core.config import settings
 
 class ZhipuKnowledgeRetriever(BaseRetriever):
     api_key: str = Field(...)
@@ -46,7 +45,7 @@ class ZhipuKnowledgeRetriever(BaseRetriever):
         ]
 
 retriever = ZhipuKnowledgeRetriever(
-    api_key=TEST_KEY,
+    api_key=settings.ZHIPU_API_KEY or settings.AI_API_KEY,
     knowledge_ids=["1999002185098272768"],
     top_k=5,
     recall_method="mixed",

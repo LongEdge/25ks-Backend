@@ -9,10 +9,9 @@ from sqlalchemy.testing import db
 
 from app.ai.langchain.prompts.LPS import SYSTEM_PROMPT
 from app.ai.langchain.utils.utils import escape_curly_braces
+from app.core.config import settings
 from app.models.user import User
 from app.service.learning_profile import build_learning_profiles_set
-
-TES_KEY='REMOVED_ZHIPU_API_KEY'
 
 def get_learning_profiles(db: Session, current_user: User)->str:
     # profiles = list_learning_profiles(db=db, teacher_id=current_user.id)
@@ -27,7 +26,12 @@ def get_learning_profiles(db: Session, current_user: User)->str:
 
 
 def get_LA_chain(db: Session, current_user: User):
-    llm = ChatZhipuAI(model="glm-4-flash", temperature=0.8, zhipuai_api_key=TES_KEY,max_tokens=128000)
+    llm = ChatZhipuAI(
+        model="glm-4-flash",
+        temperature=0.8,
+        zhipuai_api_key=settings.ZHIPU_API_KEY or settings.AI_API_KEY,
+        max_tokens=128000,
+    )
 
     user_learn_profiles = get_learning_profiles(db, current_user)
     user_learn_profiles=escape_curly_braces(user_learn_profiles)

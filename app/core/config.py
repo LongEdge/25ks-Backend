@@ -1,55 +1,46 @@
-from pydantic_settings import BaseSettings
 from typing import List
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # 项目基本配置
     PROJECT_NAME: str = "AI辅助教师备课系统"
     PROJECT_VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
-    
-    # 数据库配置
-    DATABASE_URL: str = "sqlite:///./teacher备课系统.db"
-    
-    # JWT配置
-    SECRET_KEY: str = "secretkey"
+
+    DATABASE_URL: str = "sqlite:///./app.db"
+
+    SECRET_KEY: str = "change-me"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    
-    # CORS配置
+
     CORS_ORIGINS: List[str] = ["*"]
-    
-    # AI服务配置
-    AI_API_KEY: str = "your-ai-api-key"
+
+    AI_API_KEY: str = ""
     AI_BASE_URL: str = "https://api.example.com/v1"
-    
-    # 文件存储配置
+
     UPLOAD_DIR: str = "uploads"
-    MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
-    # chormaDB配置
+    MAX_FILE_SIZE: int = 10 * 1024 * 1024
+
     CHROMA_DB_URL: str = "localhost:8000"
 
-    # redis配置
     REDIS_URL: str = "localhost:6379"
-    REDIS_KEY: str = "REDACTED"
+    REDIS_KEY: str = ""
 
-    # 智谱 AI 配置
-    ZHIPU_API_KEY: str = "REMOVED_ZHIPU_API_KEY"
+    ZHIPU_API_KEY: str = ""
     ZHIPU_BASE_URL: str = "https://open.bigmodel.cn/api/paas/v4"
 
-    # 阿里云 OSS 配置
-    ALIYUN_ACCESS_KEY_ID: str = "REMOVED_ALIYUN_ACCESS_KEY_ID"
-    ALIYUN_ACCESS_KEY_SECRET: str = "REMOVED_ALIYUN_ACCESS_KEY_SECRET"
+    ALIYUN_ACCESS_KEY_ID: str = ""
+    ALIYUN_ACCESS_KEY_SECRET: str = ""
     ALIYUN_OSS_ENDPOINT: str = "oss-cn-example.aliyuncs.com"
-    ALIYUN_OSS_BUCKET: str = "REDACTED"
+    ALIYUN_OSS_BUCKET: str = "your-bucket-name"
     ALIYUN_OSS_DOMAIN: str = "https://example-bucket.oss-cn-example.aliyuncs.com"
+
+    KG_CSV_PATH: str = r"resources/out_v2_chinese_teaching.csv"
 
     class Config:
         env_file = ".env"
         case_sensitive = True
-
-    #DuckDB
-    KG_CSV_PATH:str = r"resources/out_v2_chinese_teaching.csv"
 
 
 settings = Settings()
